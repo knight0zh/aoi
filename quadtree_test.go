@@ -1,12 +1,17 @@
 package aoi
 
 import (
+	"fmt"
 	"github.com/stretchr/testify/assert"
+	"math/rand"
+	"sync"
 	"testing"
+	"time"
 )
 
-func TestFindQuadrant(t *testing.T) {
-	tree := NewQuadTree(0, 0, 100)
+func Test_FindQuadrant(t *testing.T) {
+	aoi := NewQuadTree(0, 0, 100)
+	tree := aoi.(*QuadTree)
 	tree.cutNode()
 
 	tests := []struct {
@@ -57,8 +62,33 @@ func TestFindQuadrant(t *testing.T) {
 	}
 }
 
+func Test_NeedCut(t *testing.T) {
+	aoi := NewQuadTree(0, 0, 100)
+	tree := aoi.(*QuadTree)
+
+	tree.maxCap = 2 // 超过两人节点分裂
+	assert.Equal(t, false, tree.needCut())
+	player1 := &Entity{
+		X:    60.9,
+		Y:    24.9,
+		Name: "player1",
+	}
+	tree.Add(player1)
+
+	assert.Equal(t, false, tree.needCut())
+	player2 := &Entity{
+		X:    25,
+		Y:    25,
+		Name: "player2",
+	}
+	tree.Add(player2)
+
+	assert.Equal(t, true, tree.needCut())
+}
+
 func TestNode_Search(t *testing.T) {
-	tree := NewQuadTree(0, 0, 100)
+	aoi := NewQuadTree(0, 0, 100)
+	tree := aoi.(*QuadTree)
 	tree.maxCap = 2 // 超过两人节点分裂
 	tree.radius = 5
 	player1 := &Entity{
@@ -109,4 +139,46 @@ func TestNode_Search(t *testing.T) {
 	tree.Add(player5)
 	entities = tree.Search(player2)
 	assert.Equal(t, 2, len(entities), "player2 player5")
+
+	tree.Delete(player5)
+	entities = tree.Search(player2)
+	assert.Equal(t, 1, len(entities), "player2")
+}
+
+func BenchmarkQuadtree(b *testing.B) {
+	var wg sync.WaitGroup
+	aoi := NewQuadTree(0, 0, 100)
+	tree := aoi.(*QuadTree)
+	rand.Seed(time.Now().UnixNano())
+
+	for i := 0; i < b.N; i++ {
+		wg.Add(3000)
+		for j := 0; j < 1000; j++ {
+			go func() {
+				tree.Add(&Entity{
+					X:    float64(rand.Intn(5) * 10),
+					Y:    float64(rand.Intn(5) * 10),
+					Name: fmt.Sprintf("player%d", rand.Intn(50)),
+				})
+				wg.Done()
+			}()
+
+			go func() {
+				tree.Delete(&Entity{
+					X:    float64(rand.Intn(5) * 10),
+					Y:    float64(rand.Intn(5) * 10),
+					Name: fmt.Sprintf("player%d", rand.Intn(50)),
+				})
+				wg.Done()
+			}()
+
+			go func() {
+				tree.Search(&Entity{
+					X: float64(rand.Intn(5) * 10),
+					Y: float64(rand.Intn(5) * 10),
+				})
+				wg.Done()
+			}()
+		}
+	}
 }

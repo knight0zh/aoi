@@ -113,7 +113,7 @@ func (n *Node) cutNode() {
 	n.Entities = nil
 }
 
-func NewQuadTree(xStart, yStart, width float64, opts ...QuadOption) *QuadTree {
+func NewQuadTree(xStart, yStart, width float64, opts ...QuadOption) AOI {
 	basicNode := &Node{
 		Leaf:      true,
 		Deep:      1,

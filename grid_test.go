@@ -139,7 +139,7 @@ func BenchmarkGridManger(b *testing.B) {
 				manger.Add(&Entity{
 					X:    float64(rand.Intn(5) * 10),
 					Y:    float64(rand.Intn(5) * 10),
-					Name: fmt.Sprintf("name%d", rand.Intn(50)),
+					Name: fmt.Sprintf("player%d", rand.Intn(50)),
 				})
 				wg.Done()
 			}()
@@ -148,7 +148,7 @@ func BenchmarkGridManger(b *testing.B) {
 				manger.Delete(&Entity{
 					X:    float64(rand.Intn(5) * 10),
 					Y:    float64(rand.Intn(5) * 10),
-					Name: fmt.Sprintf("name%d", rand.Intn(50)),
+					Name: fmt.Sprintf("player%d", rand.Intn(50)),
 				})
 				wg.Done()
 			}()
