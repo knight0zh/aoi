@@ -128,13 +128,13 @@ func TestNewGridManger(t *testing.T) {
 
 func BenchmarkGridManger(b *testing.B) {
 	var wg sync.WaitGroup
-	aol := NewGridManger(0, 0, 250, 5)
+	aol := NewGridManger(0, 0, 256, 16)
 	manger := aol.(*GridManger)
 
 	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < b.N; i++ {
-		wg.Add(3000)
-		for j := 0; j < 1000; j++ {
+		wg.Add(30000)
+		for j := 0; j < 10000; j++ {
 			go func() {
 				manger.Add(&Entity{
 					X:    float64(rand.Intn(5) * 10),

@@ -152,8 +152,8 @@ func BenchmarkQuadtree(b *testing.B) {
 	rand.Seed(time.Now().UnixNano())
 
 	for i := 0; i < b.N; i++ {
-		wg.Add(3000)
-		for j := 0; j < 1000; j++ {
+		wg.Add(30000)
+		for j := 0; j < 10000; j++ {
 			go func() {
 				tree.Add(&Entity{
 					X:    float64(rand.Intn(5) * 10),

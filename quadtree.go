@@ -9,8 +9,8 @@ const (
 	rightDown
 
 	maxCap  = 500 // 节点最大容量
-	maxDeep = 5   // 节点最大深度
-	radius  = 20  // 视野半径
+	maxDeep = 3   // 节点最大深度
+	radius  = 16  // 视野半径
 )
 
 type QuadOption func(*QuadTree)
