@@ -2,6 +2,12 @@ package aoi
 
 import "sync"
 
+var (
+	// 分别将这8个方向的方向向量按顺序写入x, y的分量数组
+	dx = []int{-1, -1, -1, 0, 0, 1, 1, 1}
+	dy = []int{-1, 0, 1, -1, 1, -1, 0, 1}
+)
+
 // Grid 格子
 type Grid struct {
 	GID      int      //格子ID
@@ -15,6 +21,7 @@ type GridManger struct {
 	AreaWidth int // 格子宽度(长=宽)
 	GridCount int // 格子数量
 	grids     map[int]*Grid
+	pool      sync.Pool
 }
 
 func NewGrid(gid int) *Grid {
@@ -30,6 +37,9 @@ func NewGridManger(startX, startY, areaWidth, gridCount int) AOI {
 		AreaWidth: areaWidth,
 		GridCount: gridCount,
 		grids:     make(map[int]*Grid),
+	}
+	manager.pool.New = func() interface{} {
+		return make([]*Grid, 0, 9)
 	}
 
 	for y := 0; y < gridCount; y++ {
@@ -47,66 +57,76 @@ func (g *GridManger) gridWidth() int {
 	return g.AreaWidth / g.GridCount
 }
 
-// GetGIDByPos 通过横纵坐标获取对应的格子ID
-func (g *GridManger) GetGIDByPos(entity *Entity) int {
-	gx := (int(entity.X) - g.StartX) / g.gridWidth()
-	gy := (int(entity.Y) - g.StartY) / g.gridWidth()
+// getGIDByPos 通过横纵坐标获取对应的格子ID
+func (g *GridManger) getGIDByPos(x, y float64) int {
+	gx := (int(x) - g.StartX) / g.gridWidth()
+	gy := (int(y) - g.StartY) / g.gridWidth()
 
 	return gy*g.GridCount + gx
 }
 
-// GetSurroundGrids 根据格子的gID得到当前周边的九宫格信息
-func (g *GridManger) GetSurroundGrids(gID int) (grids []*Grid) {
+// getSurroundGrids 根据格子的gID得到当前周边的九宫格信息
+func (g *GridManger) getSurroundGrids(gID int) []*Grid {
+	grids := g.pool.Get().([]*Grid)
+	defer func() {
+		grids = grids[:0]
+		g.pool.Put(grids)
+	}()
+
 	if _, ok := g.grids[gID]; !ok {
-		return
+		return grids
 	}
 	grids = append(grids, g.grids[gID])
-
 	// 根据gID, 得到格子所在的坐标
 	x, y := gID%g.GridCount, gID/g.GridCount
 
-	// 分别将这8个方向的方向向量按顺序写入x, y的分量数组
-	dx := []int{-1, -1, -1, 0, 0, 1, 1, 1}
-	dy := []int{-1, 0, 1, -1, 1, -1, 0, 1}
-
-	surroundGID := make([]int, 0)
 	for i := 0; i < 8; i++ {
 		newX := x + dx[i]
 		newY := y + dy[i]
 
 		if newX >= 0 && newX < g.GridCount && newY >= 0 && newY < g.GridCount {
-			surroundGID = append(surroundGID, newY*g.GridCount+newX)
+			grids = append(grids, g.grids[newY*g.GridCount+newX])
 		}
 	}
 
-	for _, gID := range surroundGID {
-		grids = append(grids, g.grids[gID])
+	return grids
+}
+
+func (g *GridManger) Add(x, y float64, key string) {
+	entity := entityPool.Get().(*Entity)
+	entity.X = x
+	entity.Y = y
+	entity.Key = key
+
+	ID := g.getGIDByPos(x, y)
+	grid := g.grids[ID]
+	grid.Entities.Store(key, entity)
+}
+
+func (g *GridManger) Delete(x, y float64, key string) {
+	ID := g.getGIDByPos(x, y)
+	grid := g.grids[ID]
+
+	if entity, ok := grid.Entities.Load(key); ok {
+		grid.Entities.Delete(key)
+		entityPool.Put(entity)
 	}
-
-	return
 }
 
-func (g *GridManger) Add(entity *Entity) {
-	ID := g.GetGIDByPos(entity)
-	grid := g.grids[ID]
-	grid.Entities.Store(entity.Name, entity)
-}
-
-func (g *GridManger) Delete(entity *Entity) {
-	ID := g.GetGIDByPos(entity)
-	grid := g.grids[ID]
-	grid.Entities.Delete(entity.Name)
-}
-
-func (g *GridManger) Search(entity *Entity) (result []*Entity) {
-	ID := g.GetGIDByPos(entity)
-	grids := g.GetSurroundGrids(ID)
+func (g *GridManger) Search(x, y float64) []string {
+	result := resultPool.Get().([]string)
+	defer func() {
+		result = result[:0]
+		resultPool.Put(result)
+	}()
+	ID := g.getGIDByPos(x, y)
+	grids := g.getSurroundGrids(ID)
 	for _, grid := range grids {
 		grid.Entities.Range(func(_, value interface{}) bool {
-			result = append(result, value.(*Entity))
+			result = append(result, value.(*Entity).Key)
 			return true
 		})
 	}
 
-	return
+	return result
 }

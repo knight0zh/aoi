@@ -24,44 +24,34 @@ func TestGridManger_GetSurroundGrids(t *testing.T) {
 	aol := NewGridManger(0, 0, 250, 5)
 	manger := aol.(*GridManger)
 	tests := []struct {
-		entity *Entity
-		want   []int
+		x, y float64
+		want []int
 	}{
 		{
-			entity: &Entity{
-				X: 0, Y: 0,
-			},
+			x: 0, y: 0,
 			want: []int{0, 1, 5, 6},
 		},
 		{
-			entity: &Entity{
-				X: 150, Y: 0,
-			},
+			x: 150, y: 0,
 			want: []int{2, 3, 4, 7, 8, 9},
 		},
 		{
-			entity: &Entity{
-				X: 50, Y: 50,
-			},
+			x: 50, y: 50,
 			want: []int{0, 1, 2, 5, 6, 7, 10, 11, 12},
 		},
 		{
-			entity: &Entity{
-				X: 200, Y: 100,
-			},
+			x: 200, y: 100,
 			want: []int{8, 9, 13, 14, 18, 19},
 		},
 		{
-			entity: &Entity{
-				X: 200, Y: 200,
-			},
+			x: 200, y: 200,
 			want: []int{18, 19, 23, 24},
 		},
 	}
 
 	for _, tt := range tests {
-		ID := manger.GetGIDByPos(tt.entity)
-		grids := manger.GetSurroundGrids(ID)
+		ID := manger.getGIDByPos(tt.x, tt.y)
+		grids := manger.getSurroundGrids(ID)
 		gID := make([]int, 0)
 		for _, grid := range grids {
 			gID = append(gID, grid.GID)
@@ -76,51 +66,51 @@ func TestNewGridManger(t *testing.T) {
 	manger := aol.(*GridManger)
 	entities := []*Entity{
 		{
-			X: 0, Y: 0, Name: "a",
+			X: 0, Y: 0, Key: "a",
 		},
 		{
-			X: 50, Y: 0, Name: "b",
+			X: 50, Y: 0, Key: "b",
 		},
 		{
-			X: 100, Y: 0, Name: "c",
+			X: 100, Y: 0, Key: "c",
 		},
 		{
-			X: 50, Y: 0, Name: "d",
+			X: 50, Y: 0, Key: "d",
 		},
 		{
-			X: 50, Y: 50, Name: "e",
+			X: 50, Y: 50, Key: "e",
 		},
 		{
-			X: 50, Y: 100, Name: "f",
+			X: 50, Y: 100, Key: "f",
 		},
 		{
-			X: 100, Y: 0, Name: "g",
+			X: 100, Y: 0, Key: "g",
 		},
 		{
-			X: 100, Y: 50, Name: "h",
+			X: 100, Y: 50, Key: "h",
 		},
 		{
-			X: 100, Y: 100, Name: "i",
+			X: 100, Y: 100, Key: "i",
 		},
 	}
 
 	for _, entity := range entities {
-		manger.Add(entity)
+		manger.Add(entity.X, entity.Y, entity.Key)
 	}
 
-	search := manger.Search(&Entity{X: 50, Y: 50})
+	search := manger.Search(50, 50)
 	result := make([]string, 0)
 	for _, entity := range search {
-		result = append(result, entity.Name)
+		result = append(result, entity)
 	}
 	sort.Strings(result)
 	assert.Equal(t, []string{"a", "b", "c", "d", "e", "f", "g", "h", "i"}, result)
 
-	manger.Delete(&Entity{X: 100, Y: 100, Name: "i"})
-	search2 := manger.Search(&Entity{X: 50, Y: 50})
+	manger.Delete(100, 100, "i")
+	search2 := manger.Search(50, 50)
 	result2 := make([]string, 0)
 	for _, entity := range search2 {
-		result2 = append(result2, entity.Name)
+		result2 = append(result2, entity)
 	}
 	sort.Strings(result2)
 	assert.Equal(t, []string{"a", "b", "c", "d", "e", "f", "g", "h"}, result2)
@@ -128,7 +118,7 @@ func TestNewGridManger(t *testing.T) {
 
 func BenchmarkGridManger(b *testing.B) {
 	var wg sync.WaitGroup
-	aol := NewGridManger(0, 0, 256, 16)
+	aol := NewGridManger(0, 0, 1024, 16)
 	manger := aol.(*GridManger)
 
 	rand.Seed(time.Now().UnixNano())
@@ -136,28 +126,28 @@ func BenchmarkGridManger(b *testing.B) {
 		wg.Add(30000)
 		for j := 0; j < 10000; j++ {
 			go func() {
-				manger.Add(&Entity{
-					X:    float64(rand.Intn(5) * 10),
-					Y:    float64(rand.Intn(5) * 10),
-					Name: fmt.Sprintf("player%d", rand.Intn(50)),
-				})
+				manger.Add(
+					float64(rand.Intn(10)*10+rand.Intn(10)),
+					float64(rand.Intn(10)*10+rand.Intn(10)),
+					fmt.Sprintf("player%d", rand.Intn(100)),
+				)
 				wg.Done()
 			}()
 
 			go func() {
-				manger.Delete(&Entity{
-					X:    float64(rand.Intn(5) * 10),
-					Y:    float64(rand.Intn(5) * 10),
-					Name: fmt.Sprintf("player%d", rand.Intn(50)),
-				})
+				manger.Delete(
+					float64(rand.Intn(10)*10+rand.Intn(10)),
+					float64(rand.Intn(10)*10+rand.Intn(10)),
+					fmt.Sprintf("player%d", rand.Intn(100)),
+				)
 				wg.Done()
 			}()
 
 			go func() {
-				manger.Search(&Entity{
-					X: float64(rand.Intn(5) * 10),
-					Y: float64(rand.Intn(5) * 10),
-				})
+				manger.Search(
+					float64(rand.Intn(10)*10+rand.Intn(10)),
+					float64(rand.Intn(10)*10+rand.Intn(10)),
+				)
 				wg.Done()
 			}()
 		}

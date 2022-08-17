@@ -9,11 +9,9 @@ const (
 	rightDown
 
 	maxCap  = 500 // 节点最大容量
-	maxDeep = 3   // 节点最大深度
+	maxDeep = 4   // 节点最大深度
 	radius  = 16  // 视野半径
 )
-
-type QuadOption func(*QuadTree)
 
 type Node struct {
 	Leaf      bool      // 是否为叶子节点
@@ -21,7 +19,6 @@ type Node struct {
 	AreaWidth float64   // 格子宽度(长=宽)
 	XStart    float64   // 起始范围
 	YStart    float64   // 起始范围
-	Parent    *Node     // 父节点
 	Tree      *QuadTree // 树指针
 	Child     [4]*Node  // 子节点
 	Entities  *sync.Map // 实体
@@ -30,6 +27,7 @@ type Node struct {
 type QuadTree struct {
 	maxCap, maxDeep int
 	radius          float64
+	mPool           sync.Pool
 	*Node
 }
 
@@ -40,9 +38,8 @@ func NewSonNode(xStart, yStart float64, parent *Node) *Node {
 		AreaWidth: parent.AreaWidth / 2,
 		XStart:    xStart,
 		YStart:    yStart,
-		Parent:    parent,
 		Tree:      parent.Tree,
-		Entities:  &sync.Map{},
+		Entities:  parent.Tree.mPool.Get().(*sync.Map),
 	}
 
 	return son
@@ -99,21 +96,22 @@ func (n *Node) cutNode() {
 	n.Child[rightDown] = NewSonNode(n.XStart+half, n.YStart+half, n)
 
 	// 将实体迁移到对应子节点
-	n.Entities.Range(func(_, v interface{}) bool {
+	n.Entities.Range(func(k, v interface{}) bool {
 		entity := v.(*Entity)
 		for _, node := range n.Child {
 			if node.intersects(entity.X, entity.Y) {
-				node.Entities.Store(entity.Name, entity)
+				node.Entities.Store(entity.Key, entity)
 			}
 		}
+		n.Entities.Delete(k)
 		return true
 	})
 
-	// 清空容器
+	n.Tree.mPool.Put(n.Entities)
 	n.Entities = nil
 }
 
-func NewQuadTree(xStart, yStart, width float64, opts ...QuadOption) AOI {
+func NewQuadTree(xStart, yStart, width float64) AOI {
 	basicNode := &Node{
 		Leaf:      true,
 		Deep:      1,
@@ -121,7 +119,6 @@ func NewQuadTree(xStart, yStart, width float64, opts ...QuadOption) AOI {
 		XStart:    xStart,
 		YStart:    yStart,
 		Child:     [4]*Node{},
-		Entities:  &sync.Map{},
 	}
 	tree := &QuadTree{
 		maxDeep: maxDeep,
@@ -129,12 +126,15 @@ func NewQuadTree(xStart, yStart, width float64, opts ...QuadOption) AOI {
 		radius:  radius,
 		Node:    basicNode,
 	}
+	tree.mPool.New = func() interface{} {
+		return &sync.Map{}
+	}
 	basicNode.Tree = tree
-
+	basicNode.Entities = tree.mPool.Get().(*sync.Map)
 	return tree
 }
 
-func (n *Node) Add(entity *Entity) {
+func (n *Node) Add(x, y float64, name string) {
 	// 判断是否需要分割
 	if n.Leaf && n.needCut() {
 		n.cutNode()
@@ -142,39 +142,57 @@ func (n *Node) Add(entity *Entity) {
 
 	// 非叶子节点往下递归
 	if !n.Leaf {
-		n.Child[n.findSonQuadrant(entity.X, entity.Y)].Add(entity)
+		n.Child[n.findSonQuadrant(x, y)].Add(x, y, name)
 		return
 	}
+
+	entity := entityPool.Get().(*Entity)
+	entity.X = x
+	entity.Y = y
+	entity.Key = name
 
 	// 叶子节点进行存储
-	n.Entities.Store(entity.Name, entity)
+	n.Entities.Store(entity.Key, entity)
 }
 
-func (n *Node) Delete(entity *Entity) {
+func (n *Node) Delete(x, y float64, name string) {
 	if !n.Leaf {
-		n.Child[n.findSonQuadrant(entity.X, entity.Y)].Delete(entity)
+		n.Child[n.findSonQuadrant(x, y)].Delete(x, y, name)
 		return
 	}
 
-	n.Entities.Delete(entity.Name)
+	if entity, ok := n.Entities.Load(name); ok {
+		n.Entities.Delete(name)
+		entityPool.Put(entity)
+	}
 }
 
-func (n *Node) Search(entity *Entity) (result []*Entity) {
+func (n *Node) Search(x, y float64) []string {
+	result := resultPool.Get().([]string)
+	defer func() {
+		result = result[:0]
+		resultPool.Put(result)
+	}()
+	n.search(x, y, &result)
+	return result
+}
+
+func (n *Node) search(x, y float64, result *[]string) {
 	if !n.Leaf {
-		minX, maxX := entity.X-n.Tree.radius, entity.X+n.Tree.radius
-		minY, maxY := entity.Y-n.Tree.radius, entity.Y+n.Tree.radius
+		minX, maxX := x-n.Tree.radius, x+n.Tree.radius
+		minY, maxY := y-n.Tree.radius, y+n.Tree.radius
 
 		for _, son := range n.Child {
 			if son.intersects(minX, minY) || son.intersects(maxX, minY) ||
 				son.intersects(minX, maxY) || son.intersects(maxX, maxY) {
-				result = append(result, son.Search(entity)...)
+				son.search(x, y, result)
 			}
 		}
 		return
 	}
 
 	n.Entities.Range(func(key, value interface{}) bool {
-		result = append(result, value.(*Entity))
+		*result = append(*result, value.(*Entity).Key)
 		return true
 	})
 	return
