@@ -3,35 +3,37 @@ package aoi
 import "sync"
 
 var (
-	// 分别将这8个方向的方向向量按顺序写入x, y的分量数组
+	// Define direction vectors for the eight directions by populating dx and dy arrays.
 	dx = []int{-1, -1, -1, 0, 0, 1, 1, 1}
 	dy = []int{-1, 0, 1, -1, 1, -1, 0, 1}
 )
 
-// Grid 格子
+// Grid represents a grid with a unique identifier and entities within it.
 type Grid struct {
-	GID      int      //格子ID
-	Entities sync.Map //当前格子内的实体
+	GID      int      // Grid ID
+	Entities sync.Map // Entities within the current grid
 }
 
-// GridManger AOI九宫格实现矩形
-type GridManger struct {
-	StartX    int // X区域左边界坐标
-	StartY    int // Y区域上边界坐标
-	AreaWidth int // 格子宽度(长=宽)
-	GridCount int // 格子数量
+// GridManager implements AOI (Area of Interest) using a rectangular grid.
+type GridManager struct {
+	StartX    int // X-coordinate of the left boundary of the AOI
+	StartY    int // Y-coordinate of the upper boundary of the AOI
+	AreaWidth int // Width of each grid (assuming square grids)
+	GridCount int // Number of grids in each row/column
 	grids     map[int]*Grid
 	pool      sync.Pool
 }
 
+// NewGrid creates a new grid with the specified ID.
 func NewGrid(gid int) *Grid {
 	return &Grid{
 		GID: gid,
 	}
 }
 
-func NewGridManger(startX, startY, areaWidth, gridCount int) AOI {
-	manager := &GridManger{
+// NewGridManager initializes a new GridManager with the specified parameters.
+func NewGridManager(startX, startY, areaWidth, gridCount int) AOI {
+	manager := &GridManager{
 		StartX:    startX,
 		StartY:    startY,
 		AreaWidth: areaWidth,
@@ -42,9 +44,10 @@ func NewGridManger(startX, startY, areaWidth, gridCount int) AOI {
 		return make([]*Grid, 0, 9)
 	}
 
+	// Initialize grids with unique IDs
 	for y := 0; y < gridCount; y++ {
 		for x := 0; x < gridCount; x++ {
-			//格子编号：ID = IDy *nx + IDx  (利用格子坐标得到格子编号)
+			// Grid ID calculation: ID = IDy * nx + IDx (using grid coordinates to obtain grid ID)
 			gID := y*gridCount + x
 			manager.grids[gID] = NewGrid(gID)
 		}
@@ -53,20 +56,21 @@ func NewGridManger(startX, startY, areaWidth, gridCount int) AOI {
 	return manager
 }
 
-func (g *GridManger) gridWidth() int {
+// gridWidth calculates the width of each grid.
+func (g *GridManager) gridWidth() int {
 	return g.AreaWidth / g.GridCount
 }
 
-// getGIDByPos 通过横纵坐标获取对应的格子ID
-func (g *GridManger) getGIDByPos(x, y float64) int {
+// getGIDByPos calculates the grid ID based on the given coordinates.
+func (g *GridManager) getGIDByPos(x, y float64) int {
 	gx := (int(x) - g.StartX) / g.gridWidth()
 	gy := (int(y) - g.StartY) / g.gridWidth()
 
 	return gy*g.GridCount + gx
 }
 
-// getSurroundGrids 根据格子的gID得到当前周边的九宫格信息
-func (g *GridManger) getSurroundGrids(gID int) []*Grid {
+// getSurroundGrids retrieves information about the surrounding nine grids based on the given grid ID.
+func (g *GridManager) getSurroundGrids(gID int) []*Grid {
 	grids := g.pool.Get().([]*Grid)
 	defer func() {
 		grids = grids[:0]
@@ -77,9 +81,11 @@ func (g *GridManger) getSurroundGrids(gID int) []*Grid {
 		return grids
 	}
 	grids = append(grids, g.grids[gID])
-	// 根据gID, 得到格子所在的坐标
+
+	// Calculate the coordinates of the grid based on the grid ID
 	x, y := gID%g.GridCount, gID/g.GridCount
 
+	// Add information about the eight neighboring grids
 	for i := 0; i < 8; i++ {
 		newX := x + dx[i]
 		newY := y + dy[i]
@@ -92,7 +98,8 @@ func (g *GridManger) getSurroundGrids(gID int) []*Grid {
 	return grids
 }
 
-func (g *GridManger) Add(x, y float64, key string) {
+// Add adds an entity to the appropriate grid based on its coordinates.
+func (g *GridManager) Add(x, y float64, key string) {
 	entity := entityPool.Get().(*Entity)
 	entity.X = x
 	entity.Y = y
@@ -103,7 +110,8 @@ func (g *GridManger) Add(x, y float64, key string) {
 	grid.Entities.Store(key, entity)
 }
 
-func (g *GridManger) Delete(x, y float64, key string) {
+// Delete removes an entity from the grid based on its coordinates.
+func (g *GridManager) Delete(x, y float64, key string) {
 	ID := g.getGIDByPos(x, y)
 	grid := g.grids[ID]
 
@@ -113,14 +121,18 @@ func (g *GridManger) Delete(x, y float64, key string) {
 	}
 }
 
-func (g *GridManger) Search(x, y float64) []string {
+// Search retrieves a list of entity keys within the specified coordinates' range.
+func (g *GridManager) Search(x, y float64) []string {
 	result := resultPool.Get().([]string)
 	defer func() {
 		result = result[:0]
 		resultPool.Put(result)
 	}()
+
 	ID := g.getGIDByPos(x, y)
 	grids := g.getSurroundGrids(ID)
+
+	// Collect entity keys from the surrounding grids
 	for _, grid := range grids {
 		grid.Entities.Range(func(_, value interface{}) bool {
 			result = append(result, value.(*Entity).Key)

@@ -2,27 +2,30 @@ package aoi
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"sort"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
-/**
-         0   50   100   150    200
-     -----------------------------
+/*
+*
+
+	    0   50   100   150    200
+	-----------------------------
+
 0    |   0    1     2     3      4
 50   |   5    6     7     8      9
 100  |  10   11    12    13     14
 150  |  15   16    17    18     19
 200  |  20   21    22    23     24
-
 */
 func TestGridManger_GetSurroundGrids(t *testing.T) {
-	aol := NewGridManger(0, 0, 250, 5)
-	manger := aol.(*GridManger)
+	aol := NewGridManager(0, 0, 250, 5)
+	manger := aol.(*GridManager)
 	tests := []struct {
 		x, y float64
 		want []int
@@ -62,8 +65,8 @@ func TestGridManger_GetSurroundGrids(t *testing.T) {
 }
 
 func TestNewGridManger(t *testing.T) {
-	aol := NewGridManger(0, 0, 250, 5)
-	manger := aol.(*GridManger)
+	aol := NewGridManager(0, 0, 250, 5)
+	manger := aol.(*GridManager)
 	entities := []*Entity{
 		{
 			X: 0, Y: 0, Key: "a",
@@ -118,8 +121,8 @@ func TestNewGridManger(t *testing.T) {
 
 func BenchmarkGridManger(b *testing.B) {
 	var wg sync.WaitGroup
-	aol := NewGridManger(0, 0, 1024, 16)
-	manger := aol.(*GridManger)
+	aol := NewGridManager(0, 0, 1024, 16)
+	manger := aol.(*GridManager)
 
 	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < b.N; i++ {

@@ -8,22 +8,24 @@ const (
 	leftDown
 	rightDown
 
-	maxCap  = 500 // 节点最大容量
-	maxDeep = 4   // 节点最大深度
-	radius  = 16  // 视野半径
+	maxCap  = 500 // Maximum capacity of a node
+	maxDeep = 4   // Maximum depth of the quadtree
+	radius  = 16  // Field of view radius
 )
 
+// Node represents a node in the quadtree.
 type Node struct {
-	Leaf      bool      // 是否为叶子节点
-	Deep      int       // 深度
-	AreaWidth float64   // 格子宽度(长=宽)
-	XStart    float64   // 起始范围
-	YStart    float64   // 起始范围
-	Tree      *QuadTree // 树指针
-	Child     [4]*Node  // 子节点
-	Entities  *sync.Map // 实体
+	Leaf      bool      // Indicates whether the node is a leaf node
+	Deep      int       // Depth of the node in the quadtree
+	AreaWidth float64   // Width of the grid (assuming square grids)
+	XStart    float64   // Starting X-coordinate of the node's area
+	YStart    float64   // Starting Y-coordinate of the node's area
+	Tree      *QuadTree // Pointer to the quadtree
+	Child     [4]*Node  // Child nodes (quadrants)
+	Entities  *sync.Map // Entities within the node
 }
 
+// QuadTree represents a quadtree data structure for spatial partitioning.
 type QuadTree struct {
 	maxCap, maxDeep int
 	radius          float64
@@ -31,6 +33,7 @@ type QuadTree struct {
 	*Node
 }
 
+// NewSonNode creates a new child node with the specified parameters.
 func NewSonNode(xStart, yStart float64, parent *Node) *Node {
 	son := &Node{
 		Leaf:      true,
@@ -45,7 +48,7 @@ func NewSonNode(xStart, yStart float64, parent *Node) *Node {
 	return son
 }
 
-// canCut 检查节点是否可以分割
+// canCut checks whether the node can be split.
 func (n *Node) canCut() bool {
 	if n.XStart+n.AreaWidth/2 > 0 && n.YStart+n.AreaWidth/2 > 0 {
 		return true
@@ -53,7 +56,7 @@ func (n *Node) canCut() bool {
 	return false
 }
 
-// needCut 检查节点是否需要分割
+// needCut checks whether the node needs to be split.
 func (n *Node) needCut() bool {
 	lens := 0
 	n.Entities.Range(func(key, value interface{}) bool {
@@ -63,7 +66,7 @@ func (n *Node) needCut() bool {
 	return lens+1 > n.Tree.maxCap && n.Deep+1 <= n.Tree.maxDeep && n.canCut()
 }
 
-// intersects 检查坐标是否在节点范围内
+// intersects checks if the coordinates are within the node's range.
 func (n *Node) intersects(x, y float64) bool {
 	if n.XStart <= x && x < n.XStart+n.AreaWidth && n.YStart <= y && y < n.YStart+n.AreaWidth {
 		return true
@@ -71,7 +74,7 @@ func (n *Node) intersects(x, y float64) bool {
 	return false
 }
 
-// findSonQuadrant 根据坐标寻找子节点的方位
+// findSonQuadrant finds the quadrant of a child node based on coordinates.
 func (n *Node) findSonQuadrant(x, y float64) int {
 	if x < n.Child[rightDown].XStart {
 		if y < n.Child[rightDown].YStart {
@@ -85,7 +88,7 @@ func (n *Node) findSonQuadrant(x, y float64) int {
 	return rightDown
 }
 
-// cutNode 分割节点
+// cutNode splits the node into four child nodes.
 func (n *Node) cutNode() {
 	n.Leaf = false
 	half := n.AreaWidth / 2
@@ -95,7 +98,7 @@ func (n *Node) cutNode() {
 	n.Child[leftDown] = NewSonNode(n.XStart, n.YStart+half, n)
 	n.Child[rightDown] = NewSonNode(n.XStart+half, n.YStart+half, n)
 
-	// 将实体迁移到对应子节点
+	// Move entities to the corresponding child nodes
 	n.Entities.Range(func(k, v interface{}) bool {
 		entity := v.(*Entity)
 		for _, node := range n.Child {
@@ -111,6 +114,7 @@ func (n *Node) cutNode() {
 	n.Entities = nil
 }
 
+// NewQuadTree initializes a new QuadTree with the specified parameters.
 func NewQuadTree(xStart, yStart, width float64) AOI {
 	basicNode := &Node{
 		Leaf:      true,
@@ -134,13 +138,14 @@ func NewQuadTree(xStart, yStart, width float64) AOI {
 	return tree
 }
 
+// Add adds an entity to the quadtree based on its coordinates.
 func (n *Node) Add(x, y float64, name string) {
-	// 判断是否需要分割
+	// Check if splitting is required
 	if n.Leaf && n.needCut() {
 		n.cutNode()
 	}
 
-	// 非叶子节点往下递归
+	// Recursively add to non-leaf nodes
 	if !n.Leaf {
 		n.Child[n.findSonQuadrant(x, y)].Add(x, y, name)
 		return
@@ -151,10 +156,11 @@ func (n *Node) Add(x, y float64, name string) {
 	entity.Y = y
 	entity.Key = name
 
-	// 叶子节点进行存储
+	// Store in leaf node
 	n.Entities.Store(entity.Key, entity)
 }
 
+// Delete removes an entity from the quadtree based on its coordinates.
 func (n *Node) Delete(x, y float64, name string) {
 	if !n.Leaf {
 		n.Child[n.findSonQuadrant(x, y)].Delete(x, y, name)
@@ -167,6 +173,7 @@ func (n *Node) Delete(x, y float64, name string) {
 	}
 }
 
+// Search retrieves a list of entity keys within the specified coordinates' range.
 func (n *Node) Search(x, y float64) []string {
 	result := resultPool.Get().([]string)
 	defer func() {
@@ -177,6 +184,7 @@ func (n *Node) Search(x, y float64) []string {
 	return result
 }
 
+// search recursively searches for entities within the specified coordinates' range.
 func (n *Node) search(x, y float64, result *[]string) {
 	if !n.Leaf {
 		minX, maxX := x-n.Tree.radius, x+n.Tree.radius
@@ -191,6 +199,7 @@ func (n *Node) search(x, y float64, result *[]string) {
 		return
 	}
 
+	// Collect entity keys within the leaf node
 	n.Entities.Range(func(key, value interface{}) bool {
 		*result = append(*result, value.(*Entity).Key)
 		return true
