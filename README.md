@@ -15,14 +15,14 @@ This library provides implementations of Area of Interest algorithms for spatial
 ```go
 // Example Usage:
 aoiManager := NewGridManager(startX, startY, areaWidth, gridCount)
-aoiManager.Add(x, y, "Entity1")
-aoiManager.Delete(x, y, "Entity1")
+aoiManager.Add(x, y, "player1")
+aoiManager.Delete(x, y, "player1")
 result := aoiManager.Search(x, y)
 
 // Example Usage:
 quadTree := NewQuadTree(startX, startY, areaWidth)
-quadTree.Add(x, y, "Entity1")
-quadTree.Delete(x, y, "Entity1")
+quadTree.Add(x, y, "player1")
+quadTree.Delete(x, y, "player1")
 result := quadTree.Search(x, y)
 ```
 
