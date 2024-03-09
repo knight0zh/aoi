@@ -35,3 +35,6 @@ Implement additional commonly used AOI algorithms:
 - R-树 (R-tree)
 - 六边形网格 (Hexagonal Grid)
 - 基于事件的算法 (Event-driven Approaches)
+
+## License
+This AOI Library is licensed under the MIT License.
